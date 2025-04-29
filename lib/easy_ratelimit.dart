@@ -2,7 +2,7 @@ library easy_debounce;
 
 import 'dart:async';
 
-typedef EasyRateLimitCallback = void Function();
+typedef EasyRateLimitCallback = Future<void> Function();
 
 class _EasyRateLimitOperation {
   EasyRateLimitCallback? callback;
@@ -36,25 +36,27 @@ class EasyRateLimit {
     EasyRateLimitCallback onExecute, {
     EasyRateLimitCallback? onAfter,
   }) {
-    final rateLimited = _operations.containsKey(tag);
+    final bool rateLimited = _operations.containsKey(tag);
     if (rateLimited) {
       _operations[tag]?.callback = onExecute;
       _operations[tag]?.onAfter = onAfter;
       return true;
     }
 
-    final operation = _EasyRateLimitOperation(
-      Timer.periodic(duration, (Timer timer) {
+    final _EasyRateLimitOperation operation = _EasyRateLimitOperation(
+      Timer.periodic(duration, (Timer timer) async {
         final operation = _operations[tag];
 
         if (operation != null) {
-          if (operation.callback == null) {
-            operation.timer.cancel();
-            _operations.remove(tag);
-            onAfter?.call();
-          } else {
-            operation.callback?.call();
-            operation.onAfter?.call();
+          try {
+            if (operation.callback == null) {
+              operation.timer.cancel();
+              _operations.remove(tag);
+              await (operation.onAfter?.call());
+            } else {
+              await (operation.callback?.call());
+            }
+          } finally {
             operation.callback = null;
             operation.onAfter = null;
           }
